@@ -9,4 +9,14 @@ if uploaded_file is not None:
     data = bytes_data.decode('utf-8')
     df = preprocessing.preprocess(data)
 
-    st.dataframe(df)
+    styler = df.style.format({
+    'year': '{:d}',       # no commas on ints
+    'day':  '{:d}',
+    'hour': '{:d}',
+    # leave month alone, it’s already a string
+    })
+    st.dataframe(styler)
+
+    
+    
+
