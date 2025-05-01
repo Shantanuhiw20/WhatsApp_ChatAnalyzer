@@ -1,37 +1,130 @@
 import streamlit as st
 import preprocessing
 import helper
+import pandas as pd
+import plotly.express as px
+from datetime import timedelta
 
-st.sidebar.title("Whatsapp Chat Analyser")
+# --------------------------------------------------
+# Streamlit App: Chats Analyser
+# --------------------------------------------------
 
-uploaded_file = st.sidebar.file_uploader("Choose a File")
-if uploaded_file is not None:
-    bytes_data = uploaded_file.getvalue()
-    data = bytes_data.decode('utf-8')
-    df = preprocessing.preprocess(data)
+# Page config
+st.set_page_config(layout="wide", page_title="Chats Analyser")
 
-    styler = df.style.format({
-    'year': '{:d}',       # no commas on ints
-    'day':  '{:d}',
-    'hour': '{:d}',
-    # leave month alone, it’s already a string
-    })
-    st.dataframe(styler)
+# Custom WhatsApp-themed CSS
+st.markdown(
+    """
+    <style>
+    /* Sidebar */
+    .css-1d391kg {background-color: #075E54;}
+    .css-1v3fvcr {color: #ffffff;}
+    /* Main header */
+    .css-18e3th9 {background-color: #128C7E; padding: 1rem; border-radius: 0.5rem;}
+    .css-18e3th9 h1 {color: #ffffff;}
+    /* Metrics */
+    .stMetric > div:nth-child(1) {color: #25D366;}  /* titles */
+    .stMetric > div:nth-child(2) {color: #075E54;}  /* values */
+    </style>
+    """, unsafe_allow_html=True)
 
-    #fetch unique users
-    user_list = df['Sender'].unique().tolist()
-    user_list.sort()
-    user_list.insert(0,"Overall")
-    selected_user = st.sidebar.selectbox("Show Analysis with respect to", user_list)
+# Sidebar
+st.sidebar.title("Chats Analyser")
+uploaded_file = st.sidebar.file_uploader("Upload WhatsApp chat (.txt)")
+show_btn = st.sidebar.button("Show Analysis")
 
-    if st.sidebar.button("Show Analysis"):
+# Wait for upload & button
+if uploaded_file and show_btn:
+    # Preprocess
+    raw = uploaded_file.getvalue().decode('utf-8')
+    df = preprocessing.preprocess(raw)
 
-        num_messages = helper.fetch_stats(selected_user,df)
-        
-        col1, col2, col3, col4 = st.beta_columns(4)
+    # User filter
+    users = ['Overall'] + sorted(df['Sender'].unique().tolist())
+    selected = st.sidebar.selectbox("Select User", users)
+    df_sel = df if selected == 'Overall' else df[df['Sender'] == selected]
 
-        with col1:
-            st.header("Total Messages")
-            st.title(num_messages)
- 
+    # Fetch stats
+    msgs, words, media_count, emoji_count = helper.fetch_stats(selected, df)
 
+    # Display header
+    st.markdown("<div class='css-18e3th9'><h1>Chats Analyser</h1></div>", unsafe_allow_html=True)
+
+    # Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Messages", msgs)
+    with col2:
+        st.metric("Total Words", words)
+    with col3:
+        st.metric("Total Media Shared", media_count)
+    with col4:
+        st.metric("Total Emojis Shared", emoji_count)
+
+    # 1. Messages per user
+    st.subheader("Messages per User")
+    mpu = helper.messages_per_user(df_sel)
+    fig1 = px.bar(mpu, x='Sender', y='count', color='count', color_continuous_scale='Greens')
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # 2. Activity heatmap
+    st.subheader("Activity Heatmap (Hour vs Weekday)")
+    heat = helper.activity_heatmap(df_sel)
+    fig2 = px.imshow(heat, aspect='auto', origin='lower',
+                     color_continuous_scale='Tealgrn',
+                     labels={'x':'Weekday','y':'Hour','color':'Messages'})
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # 3. Time series
+    st.subheader("Time Series")
+    daily = helper.daily_volume(df_sel)
+    fig3 = px.line(daily, x='date', y='count', color='count',
+                   color_continuous_scale='Blues', title='Daily Volume')
+    st.plotly_chart(fig3)
+    monthly = helper.monthly_volume(df_sel)
+    fig4 = px.line(monthly, x='date', y='count', color='count',
+                   color_continuous_scale='Purples', title='Monthly Volume')
+    st.plotly_chart(fig4)
+
+    # 4. Response times
+    st.subheader("Response Time")
+    dist, avg = helper.compute_response_times(df_sel)
+    fig5 = px.histogram(dist, nbins=50, title='Reply Distribution (hrs)',
+                        color_discrete_sequence=['#25D366'])
+    st.plotly_chart(fig5)
+    fig6 = px.bar(avg, x='Sender', y='avg_hours', title='Avg Reply Time (hrs)',
+                  color='avg_hours', color_continuous_scale='Oranges')
+    st.plotly_chart(fig6)
+
+    # 5. Word analysis
+    st.subheader("Top Words & Wordcloud")
+    topw = helper.top_n_words(df_sel)
+    fig7 = px.bar(topw, x='word', y='count', title='Top 20 Words',
+                  color='count', color_continuous_scale='Greys')
+    st.plotly_chart(fig7)
+    wc = helper.generate_wordcloud(df_sel)
+    st.image(wc.to_array(), use_column_width=True)
+
+    # 6. Message types
+    st.subheader("Message Types")
+    txt, med, links = helper.message_type_counts(df_sel)
+    fig8 = px.pie(names=['Text','Media','Links'], values=[txt, med, links],
+                  color_discrete_sequence=['#128C7E','#075E54','#25D366'])
+    st.plotly_chart(fig8)
+
+    # 7. Sentiment over time
+    st.subheader("Sentiment Over Time")
+    sent = helper.sentiment_time_series(df_sel)
+    fig9 = px.line(sent, x='date', y='sentiment', title='7-Day Rolling Sentiment',
+                   color_discrete_sequence=['#34B7F1'])
+    st.plotly_chart(fig9)
+
+    # 8. Emoji leaderboard
+    st.subheader("Top Emojis")
+    topem = helper.top_emojis(df_sel)
+    fig10 = px.bar(topem, x='emoji', y='count', title='Top Emojis',
+                   color='count', color_continuous_scale='Reds')
+    st.plotly_chart(fig10)
+
+else:
+    st.markdown("<h2>Upload a file and click **Show Analysis** to begin.</h2>", unsafe_allow_html=True)
