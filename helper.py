@@ -62,12 +62,19 @@ def messages_per_user(df):
     return result
 
 def avg_msg_per_user(df):
-    """
-    Returns a Series of average messages per user (messages/user), sorted descending.
-    """
-    total_messages = df.shape[0]
-    avg_msg = ((df['Sender'].value_counts() / total_messages)*100).sort_values(ascending=False)
-    return avg_msg
+    total_messages = len(df)
+    counts = df['Sender'].value_counts()
+    percentages = counts / total_messages * 100
+
+    # build the DataFrame
+    df_avg = percentages.reset_index()
+    df_avg.columns = ['Sender', 'Message Percentage']
+
+    # format with two decimals + percent sign
+    df_avg['Message Percentage'] = df_avg['Message Percentage'].map(lambda x: f"{x:.2f}%")
+    df_avg.reset_index(drop=True, inplace=True)
+
+    return df_avg
 
 # 3. Activity heatmap data (text only)
 
@@ -101,20 +108,7 @@ def monthly_volume(df):
     text_df = filter_media(df).set_index('date')
     return text_df.resample('M').size().reset_index(name='count')
 
-# 5. Response times (text only)
-
-def compute_response_times(df):
-    """
-    Return: distribution of deltas in hours, avg reply per user (hours).
-    """
-    text_df = filter_media(df).sort_values('date').copy()
-    text_df['delta'] = text_df['date'].diff()
-    dist = text_df[text_df['delta'] > timedelta(0)]['delta'].dt.total_seconds() / 3600
-    avg = text_df.groupby('Sender')['delta'].mean().dt.total_seconds() / 3600
-    avg_df = avg.reset_index(name='avg_hours')
-    return dist, avg_df
-
-# 6. Word frequency & wordcloud (text only)
+# 5. Word frequency & wordcloud (text only)
 
 def top_n_words(df, n=20):
     """
@@ -136,7 +130,7 @@ def generate_wordcloud(df):
     wc = WordCloud(width=800, height=400, background_color='white').generate(text)
     return wc
 
-# 7. Message type counts for pie chart
+# 6. Message type counts for pie chart
 
 def message_type_counts(df):
     """
@@ -147,7 +141,7 @@ def message_type_counts(df):
     text_msgs = df.shape[0] - media
     return text_msgs, media, links
 
-# 8. Sentiment over time (text only)
+# 7. Sentiment over time (text only)
 
 def sentiment_time_series(df, window='7D'):
     """
@@ -158,7 +152,7 @@ def sentiment_time_series(df, window='7D'):
     ts = text_df.set_index('date').resample(window)['sentiment'].mean().reset_index()
     return ts
 
-# 9. Emoji usage stats (text only)
+# 8. Emoji usage stats (text only)
 
 def top_emojis(df, n=10):
     """
@@ -171,20 +165,4 @@ def top_emojis(df, n=10):
     counts = pd.Series(all_ems).value_counts().head(n)
     return counts.reset_index().rename(columns={'index':'emoji', 0:'count'})
 
-# 10. User churn/inactivity
-def user_churn(df):
-    """
-    Return last message date per user.
-    """
-    return df.groupby('Sender')['date'].max().reset_index(name='last_date')
 
-# Advanced stubs
-
-def run_topic_modeling(df, num_topics=5):
-    pass
-
-def detect_bursts(df):
-    pass
-
-def flesch_kincaid(df):
-    pass

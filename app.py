@@ -4,6 +4,7 @@ import helper
 import pandas as pd
 import plotly.express as px
 from datetime import timedelta
+import plotly.graph_objects as go
 
 # --------------------------------------------------
 # Streamlit App: Chats Analyser
@@ -76,17 +77,23 @@ if uploaded_file:
                 title=None
             )
             st.plotly_chart(fig1, use_container_width=True)
+
+            st.subheader("Percentage of Messages by Each sender")
             avg_msg = helper.avg_msg_per_user(df_sel)
-            st.dataframe(avg_msg)
+            st.dataframe(avg_msg, hide_index=True, width=6000, height=400)
 
         # 2. Activity heatmap
         st.subheader("Activity Heatmap (Hour vs Weekday)")
         heat = helper.activity_heatmap(df_sel)
         fig2 = px.imshow(
-            heat, aspect='auto', origin='lower',
-            color_continuous_scale='Tealgrn',
+            heat,
+            aspect='auto',
+            origin='lower',
+            color_continuous_scale='PuBuGn',   # dark, high-contrast
             labels={'x':'Weekday','y':'Hour','color':'Messages'},
-            title=None
+            title=None,
+            width=900,    # pixels
+            height=600    # pixels
         )
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -107,27 +114,12 @@ if uploaded_file:
         )
         st.plotly_chart(fig4)
 
-        # 4. Response times
-        st.subheader("Response Time")
-        dist, avg = helper.compute_response_times(df_sel)
-        fig5 = px.histogram(
-            dist, nbins=50,
-            title='Reply Distribution (hrs)',
-            color_discrete_sequence=['#25D366']
-        )
-        st.plotly_chart(fig5)
-        fig6 = px.bar(
-            avg, x='Sender', y='avg_hours',
-            title='Avg Reply Time (hrs)',
-            color_continuous_scale='Oranges'
-        )
-        st.plotly_chart(fig6)
-
-        # 5. Word analysis
+        # 4. Word analysis
         st.subheader("Top Words & Wordcloud")
         topw = helper.top_n_words(df_sel)
+        top_20 = topw.sort_values('count', ascending=False).head(20)
         fig7 = px.bar(
-            topw, x='word', y='count',
+            top_20, x='word', y='count',
             title='Top 20 Words',
             color_continuous_scale='Greys'
         )
@@ -135,7 +127,7 @@ if uploaded_file:
         wc = helper.generate_wordcloud(df_sel)
         st.image(wc.to_array(), use_column_width=True)
 
-        # 6. Message types
+        # 5. Message types
         st.subheader("Message Types")
         txt, med, links = helper.message_type_counts(df_sel)
         fig8 = px.pie(
@@ -146,17 +138,49 @@ if uploaded_file:
         )
         st.plotly_chart(fig8)
 
-        # 7. Sentiment over time
+        # 6. Sentiment over time
         st.subheader("Sentiment Over Time")
         sent = helper.sentiment_time_series(df_sel)
-        fig9 = px.line(
-            sent, x='date', y='sentiment',
-            color_discrete_sequence=['#34B7F1'],
-            title='7-Day Rolling Sentiment'
-        )
-        st.plotly_chart(fig9)
 
-        # 8. Emoji leaderboard
+        # Initialize figure
+        fig9 = go.Figure()
+
+        # Plot sentiment line
+        fig9.add_trace(go.Scatter(
+            x=sent['date'],
+            y=sent['sentiment'],
+            mode='lines',
+            line=dict(color='blue', width=3),
+            name="Sentiment"
+        ))
+
+        # Add horizontal lines
+        for y_val, color, dash in [(0.5, 'green', 'dash'),
+                        (0.0, 'gray', 'dot'),
+                        (-0.5, 'red', 'dash')]:
+            fig9.add_hline(
+            y=y_val,
+            line=dict(color=color, width=1, dash=dash),
+            annotation_text=f"{y_val:.1f}",
+            annotation_position="top right",
+            annotation_font=dict(color=color)
+            )
+
+        # Layout
+        fig9.update_layout(
+            title="7-Day Rolling Sentiment",
+            xaxis_title="Date",
+            yaxis_title="Sentiment Polarity",
+            legend_title="Sentiment",
+            template='plotly_white',
+            height=500,
+            width=900
+        )
+
+        st.plotly_chart(fig9, use_container_width=True)
+
+
+        # 7. Emoji leaderboard
         st.subheader("Top Emojis")
         topem = helper.top_emojis(df_sel)
         fig10 = px.bar(
