@@ -5,6 +5,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from wordcloud import WordCloud
 from textblob import TextBlob
 import emoji
+from urlextract import URLExtract
 
 # ------------------------------------------------------------------
 # Helper module for WhatsApp Chat Analyzer
@@ -42,17 +43,31 @@ def fetch_stats(selected_user, df):
     def extract_emojis(s): return [c for c in s if c in emoji.EMOJI_DATA]
     emojis = text_df['Message'].astype(str).apply(extract_emojis)
     total_emojis = emojis.apply(len).sum()
+    # Links count
+    extractor = URLExtract()
+    y = []
+    for m in df['Message']:
+        y.extend(extractor.find_urls(m))
 
-    return total_messages, total_words, total_media, total_emojis
+    return total_messages, total_words, total_media, total_emojis, len(y)
 
 # 2. Messages per user (text only)
 
 def messages_per_user(df):
     """
-    Return a DataFrame with count of non-media messages per user.
+    Return a DataFrame with count of top 10 non-media messages per user, sorted descending.
     """
     text_df = filter_media(df)
-    return text_df.groupby('Sender').size().reset_index(name='count')
+    result = (text_df.groupby('Sender').size().reset_index(name='count').sort_values('count', ascending=False).head(10))
+    return result
+
+def avg_msg_per_user(df):
+    """
+    Returns a Series of average messages per user (messages/user), sorted descending.
+    """
+    total_messages = df.shape[0]
+    avg_msg = ((df['Sender'].value_counts() / total_messages)*100).sort_values(ascending=False)
+    return avg_msg
 
 # 3. Activity heatmap data (text only)
 

@@ -56,24 +56,28 @@ if uploaded_file:
         )
 
         # Fetch stats
-        msgs, words, media_count, emoji_count = helper.fetch_stats(selected, df)
+        msgs, words, media_count, emoji_count, urls_shared = helper.fetch_stats(selected, df)
 
         # KPI metrics
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Total Messages", msgs)
         col2.metric("Total Words", words)
         col3.metric("Total Media Shared", media_count)
         col4.metric("Total Emojis Shared", emoji_count)
+        col5.metric("Total Links Shared", urls_shared)
 
         # 1. Messages per user
-        st.subheader("Messages per User")
-        mpu = helper.messages_per_user(df_sel)
-        fig1 = px.bar(
-            mpu, x='Sender', y='count',
-            color='count', color_continuous_scale='Greens',
-            title=None
-        )
-        st.plotly_chart(fig1, use_container_width=True)
+        if selected == "Overall":
+            st.subheader("Most Busy Users")
+            mpu = helper.messages_per_user(df_sel)
+            fig1 = px.bar(
+                mpu, x='Sender', y='count',
+                color='count', color_continuous_scale='Greens',
+                title=None
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+            avg_msg = helper.avg_msg_per_user(df_sel)
+            st.dataframe(avg_msg)
 
         # 2. Activity heatmap
         st.subheader("Activity Heatmap (Hour vs Weekday)")
